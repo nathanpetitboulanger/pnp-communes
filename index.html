@@ -1,0 +1,481 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Portrait des communes du Parc national des Pyrénées</title>
+  <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@6.16.0/dist/maplibre-gl.css">
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: system-ui, -apple-system, sans-serif;
+      color: #1f2937;
+    }
+    #map {
+      position: absolute;
+      inset: 0;
+    }
+
+    /* Bandeau titre discret en haut à gauche (à droite des boutons de zoom) */
+    #titre-carte {
+      position: absolute;
+      top: 10px;
+      left: 50px;
+      z-index: 1;
+      background: rgba(255, 255, 255, 0.94);
+      padding: 6px 11px;
+      border-radius: 6px;
+      box-shadow: 0 1px 4px rgba(0, 0, 0, 0.22);
+      max-width: calc(100vw - 190px);
+    }
+    #titre-carte h1 {
+      margin: 0;
+      font-size: 14px;
+      line-height: 1.25;
+      color: #0f3d23;
+    }
+    #titre-carte p {
+      margin: 2px 0 0;
+      font-size: 11px;
+      color: #4b5563;
+    }
+
+    /* Panneau légende et couches, repliable pour mobile */
+    #panneau {
+      position: absolute;
+      top: 10px;
+      right: 10px;
+      z-index: 2;
+      width: 255px;
+      max-width: calc(100vw - 20px);
+      max-height: calc(100dvh - 55px);
+      overflow-y: auto;
+      background: rgba(255, 255, 255, 0.96);
+      padding: 8px 12px;
+      border-radius: 6px;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+      font-size: 12.5px;
+      line-height: 1.5;
+    }
+    #panneau summary {
+      cursor: pointer;
+      font-weight: 700;
+      font-size: 13px;
+      color: #0f3d23;
+      user-select: none;
+    }
+    .bloc {
+      margin-top: 9px;
+      padding-top: 7px;
+      border-top: 1px solid #e5e7eb;
+    }
+    .bloc-titre {
+      margin: 0 0 4px;
+      font-weight: 700;
+      font-size: 12px;
+      color: #111827;
+    }
+    #panneau label {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      cursor: pointer;
+      margin: 3px 0;
+    }
+    .swatch {
+      display: inline-block;
+      width: 15px;
+      height: 11px;
+      border: 1px solid rgba(0, 0, 0, 0.35);
+      border-radius: 2px;
+      flex-shrink: 0;
+    }
+    .ligne-leg {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      margin: 2px 0;
+    }
+    .trait-leg {
+      display: inline-block;
+      width: 18px;
+      flex-shrink: 0;
+    }
+    .cercles-leg {
+      display: block;
+      margin: 4px 0 2px;
+    }
+    .note-leg {
+      margin: 6px 0 0;
+      font-size: 11px;
+      color: #4b5563;
+      line-height: 1.35;
+    }
+
+    /* Fiche commune dans la fenêtre surgissante */
+    .maplibregl-popup-content {
+      padding: 10px 12px;
+      border-radius: 6px;
+      font-size: 12.5px;
+      line-height: 1.45;
+      max-width: 270px;
+    }
+    .fiche-titre {
+      margin: 0 0 2px;
+      font-size: 14px;
+      font-weight: 700;
+      color: #0f3d23;
+    }
+    .fiche-sous {
+      margin: 0 0 6px;
+      font-size: 11px;
+      color: #6b7280;
+    }
+    .fiche-badge {
+      display: inline-block;
+      padding: 1px 6px;
+      margin-bottom: 7px;
+      border-radius: 999px;
+      font-size: 11px;
+      font-weight: 600;
+      background: #e6f4ea;
+      color: #0f5132;
+    }
+    .fiche-table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+    .fiche-table td {
+      padding: 2px 0;
+      vertical-align: top;
+    }
+    .fiche-table td:last-child {
+      text-align: right;
+      font-weight: 600;
+      white-space: nowrap;
+      padding-left: 10px;
+    }
+
+    /* Adaptations téléphone */
+    @media (max-width: 639px) {
+      #titre-carte {
+        top: 10px;
+        left: 50px;
+        right: 10px;
+        max-width: none;
+        padding: 5px 9px;
+      }
+      #titre-carte h1 { font-size: 13px; }
+      #titre-carte p { display: none; }
+      #panneau {
+        top: auto;
+        bottom: 34px;
+        right: 10px;
+        width: auto;
+        min-width: 148px;
+        max-width: calc(100vw - 20px);
+        max-height: 55dvh;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div id="map"></div>
+
+  <header id="titre-carte">
+    <h1>Communes du Parc national des Pyrénées</h1>
+    <p>69 communes · part en cœur et population municipale (INSEE 2022)</p>
+  </header>
+
+  <details id="panneau">
+    <summary>Légende &amp; couches</summary>
+
+    <div class="bloc">
+      <p class="bloc-titre">Part du territoire en cœur de parc</p>
+      <label><input type="checkbox" id="chk-communes" checked> Afficher les communes</label>
+      <div class="ligne-leg"><span class="swatch" style="background: #edf8e9;"></span> 0 % (aire d'adhésion seule · 55)</div>
+      <div class="ligne-leg"><span class="swatch" style="background: #a1d99b;"></span> 1 à 20 % (5 communes)</div>
+      <div class="ligne-leg"><span class="swatch" style="background: #41ab5d;"></span> 20 à 40 % (4 communes)</div>
+      <div class="ligne-leg"><span class="swatch" style="background: #006d2c;"></span> 40 % et plus (5 communes)</div>
+    </div>
+
+    <div class="bloc">
+      <p class="bloc-titre">Population municipale (2022)</p>
+      <label><input type="checkbox" id="chk-population" checked> Afficher les cercles</label>
+      <!-- Cercles exacts à l'échelle de la carte : r = 0.3 * sqrt(pop) -->
+      <svg class="cercles-leg" width="185" height="62" viewBox="0 0 185 62" aria-label="Légende des cercles proportionnels">
+        <circle cx="30" cy="31" r="25.1" fill="#e66101" fill-opacity="0.65" stroke="#ffffff" stroke-width="1.2"/>
+        <circle cx="30" cy="46.6" r="9.5" fill="#e66101" fill-opacity="0.75" stroke="#ffffff" stroke-width="1.2"/>
+        <circle cx="30" cy="53.1" r="3.0" fill="#e66101" fill-opacity="0.85" stroke="#ffffff" stroke-width="1.2"/>
+        <line x1="30" y1="6" x2="72" y2="6" stroke="#6b7280" stroke-width="0.8" stroke-dasharray="2,2"/>
+        <line x1="30" y1="37" x2="72" y2="37" stroke="#6b7280" stroke-width="0.8" stroke-dasharray="2,2"/>
+        <line x1="30" y1="50" x2="72" y2="50" stroke="#6b7280" stroke-width="0.8" stroke-dasharray="2,2"/>
+        <text x="76" y="10" font-size="11" fill="#1f2937">7 000 hab.</text>
+        <text x="76" y="41" font-size="11" fill="#1f2937">1 000 hab.</text>
+        <text x="76" y="54" font-size="11" fill="#1f2937">100 hab.</text>
+      </svg>
+      <p class="note-leg">Surface du cercle proportionnelle à la population municipale totale de la commune (pas uniquement dans le Parc).</p>
+    </div>
+
+    <div class="bloc">
+      <p class="bloc-titre">Limites du Parc national</p>
+      <label>
+        <input type="checkbox" id="chk-coeur" checked>
+        <span class="trait-leg" style="border-top: 2.5px solid #00441b;"></span> Cœur du parc
+      </label>
+      <label>
+        <input type="checkbox" id="chk-aire" checked>
+        <span class="trait-leg" style="border-top: 2px dashed #238b45;"></span> Aire d'adhésion
+      </label>
+    </div>
+
+    <p class="note-leg">Touchez ou cliquez une commune pour afficher sa fiche détaillée.</p>
+  </details>
+
+  <!-- Bibliothèque pmtiles en script classique (exposé en variable globale `pmtiles`) -->
+  <script src="https://unpkg.com/pmtiles@4.5.0/dist/pmtiles.js"></script>
+  <script type="module">
+    import * as maplibregl from "https://unpkg.com/maplibre-gl@6.16.0/dist/maplibre-gl.mjs";
+
+    // Légende ouverte par défaut sur ordinateur, repliée sur téléphone
+    const panneau = document.getElementById("panneau");
+    if (window.innerWidth >= 640) {
+      panneau.open = true;
+    }
+
+    // Enregistrement du protocole pmtiles://
+    const protocole = new pmtiles.Protocol();
+    maplibregl.addProtocol("pmtiles", protocole.tile);
+
+    // Création de la carte sur le fond Plan IGN gris (met en valeur les aplats et cercles)
+    const map = new maplibregl.Map({
+      container: "map",
+      style: "https://data.geopf.fr/annexes/ressources/vectorTiles/styles/PLAN.IGN/gris.json",
+      attributionControl: { customAttribution: "Plan IGN © IGN" },
+    });
+
+    // Emprise calculée sur les 69 communes retenues ([[ouest, sud], [est, nord]])
+    map.fitBounds([[-0.733, 42.676], [0.367, 43.178]], {
+      padding: 24,
+      animate: false,
+    });
+
+    map.addControl(new maplibregl.NavigationControl(), "top-left");
+    map.addControl(new maplibregl.ScaleControl(), "bottom-left");
+    window.map = map;
+
+    const fmtInt = new Intl.NumberFormat("fr-FR");
+    const fmtDec = new Intl.NumberFormat("fr-FR", { maximumFractionDigits: 1 });
+    const fmtKm2 = new Intl.NumberFormat("fr-FR", { maximumFractionDigits: 2 });
+
+    function creerContenuFiche(p) {
+      const div = document.createElement("div");
+
+      const h = document.createElement("p");
+      h.className = "fiche-titre";
+      h.textContent = p.nom;
+      div.appendChild(h);
+
+      const sous = document.createElement("p");
+      sous.className = "fiche-sous";
+      const nomDep = p.departement === "64" ? "Pyrénées-Atlantiques (64)" : "Hautes-Pyrénées (65)";
+      sous.textContent = `${nomDep} · INSEE ${p.code_insee}`;
+      div.appendChild(sous);
+
+      const badge = document.createElement("span");
+      badge.className = "fiche-badge";
+      badge.textContent = p.statut;
+      div.appendChild(badge);
+
+      const table = document.createElement("table");
+      table.className = "fiche-table";
+
+      const anneePop = p.date_population ? String(p.date_population).slice(0, 4) : "2022";
+      const lignes = [
+        [`Population (${anneePop})`, `${fmtInt.format(p.population)} hab.`],
+        ["Part en cœur", `${fmtDec.format(p.pct_coeur)} % (${fmtKm2.format(p.coeur_km2)} km²)`],
+        ["Part en aire d'adhésion", `${fmtDec.format(p.pct_aire)} % (${fmtKm2.format(p.aire_km2)} km²)`],
+        ["Surface communale", `${fmtKm2.format(p.surface_km2)} km²`],
+      ];
+
+      for (const [libelle, valeur] of lignes) {
+        const tr = document.createElement("tr");
+        const td1 = document.createElement("td");
+        td1.textContent = libelle;
+        const td2 = document.createElement("td");
+        td2.textContent = valeur;
+        tr.append(td1, td2);
+        table.appendChild(tr);
+      }
+      div.appendChild(table);
+      return div;
+    }
+
+    map.on("load", () => {
+      // Trouver la couche d'écritures la plus basse du Plan IGN pour glisser les aplats dessous
+      const couches = map.getStyle().layers;
+      let premiereEcriture;
+      for (let i = couches.length - 1; i >= 0; i--) {
+        if (couches[i].type !== "symbol") break;
+        premiereEcriture = couches[i].id;
+      }
+
+      map.addSource("communes_parc", {
+        type: "vector",
+        url: "pmtiles://donnees/communes_parc.pmtiles",
+        attribution: "IGN, ADMIN EXPRESS ; INSEE, population municipale ; DREAL Nouvelle-Aquitaine",
+      });
+
+      // 1. Aplats choroplèthes : part de la commune en cœur de parc
+      map.addLayer({
+        id: "communes-fill",
+        type: "fill",
+        source: "communes_parc",
+        "source-layer": "communes",
+        paint: {
+          "fill-color": [
+            "step", ["get", "pct_coeur"],
+            "#edf8e9",
+            0.1, "#a1d99b",
+            20, "#41ab5d",
+            40, "#006d2c",
+          ],
+          "fill-opacity": [
+            "case", ["boolean", ["feature-state", "survol"], false],
+            0.82,
+            0.64,
+          ],
+        },
+      }, premiereEcriture);
+
+      // 2. Contours communaux
+      map.addLayer({
+        id: "communes-contour",
+        type: "line",
+        source: "communes_parc",
+        "source-layer": "communes",
+        paint: {
+          "line-color": [
+            "case", ["boolean", ["feature-state", "survol"], false],
+            "#0f3d23",
+            "#52606d",
+          ],
+          "line-width": [
+            "case", ["boolean", ["feature-state", "survol"], false],
+            2.2,
+            0.8,
+          ],
+        },
+      }, premiereEcriture);
+
+      // 3. Limites du Parc national (aire d'adhésion et cœur)
+      map.addLayer({
+        id: "aire-limite",
+        type: "line",
+        source: "communes_parc",
+        "source-layer": "aire",
+        paint: {
+          "line-color": "#238b45",
+          "line-width": 1.8,
+          "line-dasharray": [4, 3],
+        },
+      }, premiereEcriture);
+
+      map.addLayer({
+        id: "coeur-limite",
+        type: "line",
+        source: "communes_parc",
+        "source-layer": "coeur",
+        paint: {
+          "line-color": "#00441b",
+          "line-width": 2.4,
+        },
+      }, premiereEcriture);
+
+      // 4. Cercles proportionnels : population municipale (surface proportionnelle => r = k * sqrt(pop))
+      map.addLayer({
+        id: "population-cercles",
+        type: "circle",
+        source: "communes_parc",
+        "source-layer": "communes_points",
+        paint: {
+          "circle-radius": ["*", 0.3, ["sqrt", ["get", "population"]]],
+          "circle-color": "#e66101",
+          "circle-opacity": 0.72,
+          "circle-stroke-color": "#ffffff",
+          "circle-stroke-width": 1.2,
+        },
+      });
+
+      // Survol sur ordinateur : mise en évidence de la commune sous le pointeur
+      let idSurvol = null;
+      map.on("mousemove", "communes-fill", (e) => {
+        map.getCanvas().style.cursor = "pointer";
+        const f = e.features[0];
+        if (!f || f.id === undefined) return;
+        if (idSurvol !== null && idSurvol !== f.id) {
+          map.setFeatureState(
+            { source: "communes_parc", sourceLayer: "communes", id: idSurvol },
+            { survol: false }
+          );
+        }
+        idSurvol = f.id;
+        map.setFeatureState(
+          { source: "communes_parc", sourceLayer: "communes", id: idSurvol },
+          { survol: true }
+        );
+      });
+
+      map.on("mouseleave", "communes-fill", () => {
+        map.getCanvas().style.cursor = "";
+        if (idSurvol !== null) {
+          map.setFeatureState(
+            { source: "communes_parc", sourceLayer: "communes", id: idSurvol },
+            { survol: false }
+          );
+          idSurvol = null;
+        }
+      });
+
+      // Clic / appui tactile : ouvre la fiche de la commune (priorité au cercle si superposé)
+      let popupActive = null;
+      map.on("click", (e) => {
+        const couchesCliquables = ["population-cercles", "communes-fill"].filter(
+          (id) => map.getLayoutProperty(id, "visibility") !== "none"
+        );
+        if (couchesCliquables.length === 0) return;
+        const features = map.queryRenderedFeatures(e.point, { layers: couchesCliquables });
+        if (features.length === 0) return;
+
+        if (popupActive) popupActive.remove();
+        popupActive = new maplibregl.Popup({ closeButton: true, maxWidth: "280px" })
+          .setLngLat(e.lngLat)
+          .setDOMContent(creerContenuFiche(features[0].properties))
+          .addTo(map);
+      });
+
+      // Contrôles d'affichage dans la légende
+      const basculer = (ids, visible) => {
+        const etat = visible ? "visible" : "none";
+        for (const id of ids) {
+          map.setLayoutProperty(id, "visibility", etat);
+        }
+      };
+
+      document.getElementById("chk-communes").addEventListener("change", (e) => {
+        basculer(["communes-fill", "communes-contour"], e.target.checked);
+      });
+      document.getElementById("chk-population").addEventListener("change", (e) => {
+        basculer(["population-cercles"], e.target.checked);
+      });
+      document.getElementById("chk-coeur").addEventListener("change", (e) => {
+        basculer(["coeur-limite"], e.target.checked);
+      });
+      document.getElementById("chk-aire").addEventListener("change", (e) => {
+        basculer(["aire-limite"], e.target.checked);
+      });
+    });
+  </script>
+</body>
+</html>
